@@ -1,0 +1,47 @@
+ntoskrnl.exe!ZwCreateFile:
+.text:0040C586                 mov     eax, 25h
+.text:0040C58B                 lea     edx, [esp+FileHandle]
+.text:0040C58F                 pushf
+.text:0040C590                 push    8
+.text:0040C592                 call    sub_4067D1
+.text:0040C597                 retn    2Ch
+.text:0040C597 ZwCreateFile    endp
+
+ntoskrnl.exe!NtCreateFile:
+PAGE:0049CDFB                 mov     edi, edi
+PAGE:0049CDFD                 push    ebp
+PAGE:0049CDFE                 mov     ebp, esp
+PAGE:0049CE00                 xor     eax, eax
+PAGE:0049CE02                 push    eax
+PAGE:0049CE03                 push    eax
+PAGE:0049CE04                 push    eax
+PAGE:0049CE05                 push    [ebp+EaLength]
+PAGE:0049CE08                 push    [ebp+EaBuffer]
+PAGE:0049CE0B                 push    [ebp+CreateOptions]
+PAGE:0049CE0E                 push    [ebp+CreateDisposition]
+PAGE:0049CE11                 push    [ebp+ShareAccess]
+PAGE:0049CE14                 push    [ebp+FileAttributes]
+PAGE:0049CE17                 push    [ebp+AllocationSize]
+PAGE:0049CE1A                 push    [ebp+IoStatusBlock]
+PAGE:0049CE1D                 push    [ebp+ObjectAttributes]
+PAGE:0049CE20                 push    [ebp+DesiredAccess]
+PAGE:0049CE23                 push    [ebp+FileHandle]
+PAGE:0049CE26                 call    IoCreateFile
+PAGE:0049CE2B                 pop     ebp
+PAGE:0049CE2C                 retn    2Ch
+PAGE:0049CE2C NtCreateFile    endp
+
+
+ntdll.dll!NtCreateFile:
+.text:7C92D0AE                 mov     eax, 25h        ; NtCreateFile
+.text:7C92D0B3                 mov     edx, 7FFE0300h
+.text:7C92D0B8                 call    dword ptr [edx]
+.text:7C92D0BA                 retn    2Ch
+.text:7C92D0BA ZwCreateFile    endp
+
+ntdll.dll!ZwCreateFile:
+.text:7C92D0AE                 mov     eax, 25h        ; NtCreateFile
+.text:7C92D0B3                 mov     edx, 7FFE0300h
+.text:7C92D0B8                 call    dword ptr [edx]
+.text:7C92D0BA                 retn    2Ch
+.text:7C92D0BA ZwCreateFile    endp

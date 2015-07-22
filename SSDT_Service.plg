@@ -1,0 +1,43 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: SSDT_Service - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating command line "rc.exe /l 0x804 /fo"Debug/SSDT_Service.res" /d "_DEBUG" "F:\project\Windows\SSDT_Service_VXer\SSDT_Service.rc"" 
+Creating temporary file "C:\DOCUME~1\AVer\LOCALS~1\Temp\RSP1E.tmp" with contents
+[
+/nologo /MTd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /FR"Debug/" /Fp"Debug/SSDT_Service.pch" /Yu"stdafx.h" /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"F:\project\Windows\SSDT_Service_VXer\SSDT_Service.cpp"
+"F:\project\Windows\SSDT_Service_VXer\SSDT_ServiceDlg.cpp"
+]
+Creating command line "cl.exe @C:\DOCUME~1\AVer\LOCALS~1\Temp\RSP1E.tmp" 
+Creating temporary file "C:\DOCUME~1\AVer\LOCALS~1\Temp\RSP1F.tmp" with contents
+[
+/nologo /MTd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /FR"Debug/" /Fp"Debug/SSDT_Service.pch" /Yc"stdafx.h" /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"F:\project\Windows\SSDT_Service_VXer\StdAfx.cpp"
+]
+Creating command line "cl.exe @C:\DOCUME~1\AVer\LOCALS~1\Temp\RSP1F.tmp" 
+Creating command line "link.exe /nologo /subsystem:windows /incremental:yes /pdb:"Debug/SSDT_Service.pdb" /debug /machine:I386 /out:"Debug/SSDT_Service.exe" /pdbtype:sept  .\Debug\SSDT_Service.obj .\Debug\SSDT_ServiceDlg.obj .\Debug\StdAfx.obj .\Debug\SSDT_Service.res "
+<h3>Output Window</h3>
+Compiling resources...
+Compiling...
+StdAfx.cpp
+Compiling...
+SSDT_Service.cpp
+SSDT_ServiceDlg.cpp
+Generating Code...
+Linking...
+Creating command line "bscmake.exe /nologo /o"Debug/SSDT_Service.bsc"  .\Debug\StdAfx.sbr .\Debug\SSDT_Service.sbr .\Debug\SSDT_ServiceDlg.sbr"
+Creating browse info file...
+<h3>Output Window</h3>
+
+
+
+<h3>Results</h3>
+SSDT_Service.exe - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

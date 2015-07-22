@@ -1,0 +1,86 @@
+某些Zw*和Nt*函数既在ntdll.dll中导出又在ntoskrnl.exe中导出，他们有什么区别呢？
+我们分三部分比较：
+step 1: ntdll.dll中的Zw*和Nt*有什么区别？
+step 2: ntoskrnl.exe中的Zw*和Nt*有什么区别？
+step 3: ntdll.dll中的Zw*与ntoskrnl.exe中的Zw*有什么区别? 
+        ntdll.dll中的Nt*与ntoskrnl.exe中的Nt*有什么区别?
+在下面的讨论中我们以ZwCreateFile和NtCreateFile为例
+
+讨论前：我先贴点Kd给我们的答案
+Part1:
+kd> u Ntdll! ZwCreateFile L4
+ntdll!ZwCreateFile:
+77f87cac b820000000       mov     eax,0x20
+77f87cb1 8d542404         lea     edx,[esp+0x4]
+77f87cb5 cd2e             int     2e
+77f87cb7 c22c00           ret     0x2c
+kd> u Ntdll! NtCreateFile L4
+ntdll!ZwCreateFile:
+77f87cac b820000000       mov     eax,0x20
+77f87cb1 8d542404         lea     edx,[esp+0x4]
+77f87cb5 cd2e             int     2e
+77f87cb7 c22c00           ret     0x2c
+
+Part2:
+kd> u Nt!ZwCreateFile L4
+nt!ZwCreateFile:
+8042fa70 b820000000       mov     eax,0x20
+8042fa75 8d542404         lea     edx,[esp+0x4]
+8042fa79 cd2e             int     2e
+8042fa7b c22c00           ret     0x2c
+kd> u Nt!NtCreateFile L14
+nt!NtCreateFile:
+804a7172 55               push    ebp
+804a7173 8bec             mov     ebp,esp
+804a7175 33c0             xor     eax,eax
+804a7177 50               push    eax
+804a7178 50               push    eax
+804a7179 50               push    eax
+804a717a ff7530           push    dword ptr [ebp+0x30]
+804a717d ff752c           push    dword ptr [ebp+0x2c]
+804a7180 ff7528           push    dword ptr [ebp+0x28]
+804a7183 ff7524           push    dword ptr [ebp+0x24]
+804a7186 ff7520           push    dword ptr [ebp+0x20]
+804a7189 ff751c           push    dword ptr [ebp+0x1c]
+804a718c ff7518           push    dword ptr [ebp+0x18]
+804a718f ff7514           push    dword ptr [ebp+0x14]
+804a7192 ff7510           push    dword ptr [ebp+0x10]
+804a7195 ff750c           push    dword ptr [ebp+0xc]
+804a7198 ff7508           push    dword ptr [ebp+0x8]
+804a719b e8b284ffff       call    nt!IoCreateFile (8049f652)
+804a71a0 5d               pop     ebp
+804a71a1 c22c00           ret     0x2c
+
+
+
+1) Part1 输出的是Ntdll.dll中ZwCreateFile和NtCreateFile的汇编代码，我们发现实现是一样的;
+eax是中断号，edx是函数的参数起始地址([Esp]是返回地址)；从而我可以大胆的说：Ntdll.dll中ZwCreateFile和NtCreateFile功能是一样的作用：都是调用int 2E中断；
+
+IDA给我们的答案：
+.text:77F87CAC ; Exported entry 92. NtCreateFile
+.text:77F87CAC ; Exported entry 740. ZwCreateFile
+.text:77F87CAC
+.text:77F87CAC
+.text:77F87CAC                 public ZwCreateFile
+.text:77F87CAC ZwCreateFile    proc near               ;
+.text:77F87CAC
+.text:77F87CAC arg_0           = dword ptr 4
+.text:77F87CAC
+.text:77F87CAC                 mov     eax, 20h        ; NtCreateFile
+.text:77F87CB1                 lea     edx, [esp+arg_0]
+.text:77F87CB5                 int     2Eh             ; DOS 2+ internal - EXECUTE COMMAND
+.text:77F87CB5                                         ; DS:SI -> counted CR-terminated command string
+.text:77F87CB7                 retn    2Ch
+.text:77F87CB7 ZwCreateFile    endp
+
+原来在ntdll中NtCreateFile只是ZwCreateFile的别名。
+
+
+
+2) Part2 输出的是Ntoskrnl.exe中ZwCreateFile和NtCreateFile的汇编代码，也许令你很失望，汇编代码不一样；ZwCreateFile中eax是中断号，edx是函数的参数起始地址，然后调用int 2E中断； NtCreateFile只是把参数入栈去调用IoCreateFile；
+他们的区别是:NtCreateFile是实现代码，而ZwCreateFile仍通过中断来实现功能，2E软中断的20h子中断号的处理程序是NtCreateFile；这样一说他们是没区别了？错！NtCreateFile是在ring0下了，而ZwCreateFile是通过int 2E进入ring0的，而不论ZwCreateFile处于什么模式下。
+
+
+3) 从而我们得出:
+   ntdll.dll中ZwCreateFile与ntoskrnl.exe中ZwCreateFile的区别是：前者是user Mode application called，后者是Kernel Mode driver Called;
+    ntdll.dll中NtCreateFile与ntoskrnl.exe中NtCreateFile区别是：前者在ring3下工作，后者在ring0下工作；前者通过中断实现，后者是前者的中断处理程序。

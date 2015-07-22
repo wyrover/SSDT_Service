@@ -1,0 +1,166 @@
+标 题: 【原创】SSDT Hook的妙用－对抗ring0 inline hook
+作 者: 堕落天才
+时 间: 2007-03-10,15:18:32
+链 接: http://bbs.pediy.com/showthread.php?t=40832
+
+
+1,SSDT
+     SSDT即系统服务描述符表，它的结构如下(参考《Undocument Windows 2000 Secretes》第二章):
+     typedef struct _SYSTEM_SERVICE_TABLE
+     {
+       PVOID   ServiceTableBase;        //这个指向系统服务函数地址表
+       PULONG  ServiceCounterTableBase;
+       ULONG   NumberOfService;         //服务函数的个数,NumberOfService*4 就是整个地址表的大小
+       ULONG   ParamTableBase;
+     }SYSTEM_SERVICE_TABLE,*PSYSTEM_SERVICE_TABLE;   
+     
+     typedef struct _SERVICE_DESCRIPTOR_TABLE
+     {
+       SYSTEM_SERVICE_TABLE   ntoskrnel;  //ntoskrnl.exe的服务函数
+       SYSTEM_SERVICE_TABLE   win32k;     //win32k.sys的服务函数,(gdi.dll/user.dll的内核支持)
+       SYSTEM_SERVICE_TABLE   NotUsed1;
+       SYSTEM_SERVICE_TABLE   NotUsed2;
+     }SYSTEM_DESCRIPTOR_TABLE,*PSYSTEM_DESCRIPTOR_TABLE;
+     
+     内核中有两个系统服务描述符表,一个是KeServiceDescriptorTable(由ntoskrnl.exe导出),一个是KeServieDescriptorTableShadow(没有导出)。两者的区别是，KeServiceDescriptorTable仅有ntoskrnel一项，KeServieDescriptorTableShadow包含了ntoskrnel以及win32k。一般的Native API的服务地址由KeServiceDescriptorTable分派，gdi.dll/user.dll的内核API调用服务地址由KeServieDescriptorTableShadow分派。还有要清楚一点的是win32k.sys只有在GUI线程中才加载，一般情况下是不加载的，所以要Hook KeServieDescriptorTableShadow的话，一般是用一个GUI程序通过IoControlCode来触发(想当初不明白这点，蓝屏死机了N次都想不明白是怎么回事)。
+ 
+ 2，SSDT HOOK 
+    SSDT HOOK 的原理其实非常简单，我们先实际看看KeServiceDescriptorTable是什么样的。    
+    lkd> dd KeServiceDescriptorTable
+    8055ab80  804e3d20 00000000 0000011c 804d9f48
+    8055ab90  00000000 00000000 00000000 00000000
+    8055aba0  00000000 00000000 00000000 00000000
+    8055abb0  00000000 00000000 00000000 00000000   
+    在windbg.exe中我们就看得比较清楚，KeServiceDescriptorTable中就只有第一项有数据，其他都是0。其中804e3d20就是
+KeServiceDescriptorTable.ntoskrnel.ServiceTableBase，服务函数个数为0x11c个。我们再看看804e3d20地址里是什么东西：
+    lkd> dd 804e3d20
+    804e3d20  80587691 805716ef 8057ab71 80581b5c
+    804e3d30  80599ff7 80637b80 80639d05 80639d4e
+    804e3d40  8057741c 8064855b 80637347 80599539
+    804e3d50  8062f4ec 8057a98c 8059155e 8062661f
+    如上,80587691 805716ef 8057ab71 80581b5c 这些就是系统服务函数的地址了。比如当我们在ring3调用OpenProcess时，进入sysenter的ID是0x7A(XP SP2)，然后系统查KeServiceDescriptorTable，大概是这样KeServiceDescriptorTable.ntoskrnel.ServiceTableBase(804e3d20) + 0x7A * 4 = 804E3F08,然后804E3F08 ->8057559e 这个就是OpenProcess系统服务函数所在,我们再跟踪看看:
+    lkd> u 8057559e
+    nt!NtOpenProcess:
+    8057559e 68c4000000      push    0C4h
+    805755a3 6860b54e80      push    offset nt!ObReferenceObjectByPointer+0x127 (804eb560)
+    805755a8 e8e5e4f6ff      call    nt!InterlockedPushEntrySList+0x79 (804e3a92)
+    805755ad 33f6            xor     esi,esi
+    原来8057559e就是NtOpenProcess函数所在的起始地址。  
+    嗯，如果我们把8057559e改为指向我们函数的地址呢？比如 MyNtOpenProcess，那么系统就会直接调用MyNtOpenProcess，而不是原来的NtOpenProcess了。这就是SSDT HOOK 原理所在。
+
+  3, ring0 inline hook
+     ring0 inline hook 跟ring3的没什么区别了，如果硬说有的话，那么就是ring3发生什么差错的话程序会挂掉，ring0发生什么差错的话系统就挂掉，所以一定要很小心。inline hook的基本思想就是在目标函数中JMP到自己的监视函数，做一些判断然后再JMP回去。一般都是修改函数头，不过再其他地方JMP也是可以的。下面我们来点实际的吧:
+     lkd> u nt!NtOpenProcess
+     nt!NtOpenProcess:
+     8057559e e95d6f4271      jmp     f199c500
+     805755a3 e93f953978      jmp     f890eae7
+     805755a8 e8e5e4f6ff      call    nt!InterlockedPushEntrySList+0x79 (804e3a92)
+     ...
+     同时打开“冰刃”跟“Rootkit Unhooker”我们就能在NtOpenProcess函数头看到这样的“奇观”,第一个jmp是“冰刃”的，第二个jmp是“Rootkit Unhooker”的。他们这样是防止被恶意程序通过TerminateProcess关闭。当然“冰刃”还Hook了NtTerminateProcess等函数。
+
+×××××××××××××××××××××××××××××××××××××××××××××××××××××××××××××××
+    好了，道理就说完了，下面就进入本文正题。
+    对付ring0 inline hook的基本思路是这样的，自己写一个替换的内核函数，以NtOpenProcess为例，就是MyNtOpenProcess。然后修改SSDT表，让系统服务进入自己的函数MyNtOpenProcess。而MyNtOpenProcess要做的事就是，实现NtOpenProcess前10字节指令，然后再JMP到原来的NtOpenProcess的十字节后。这样NtOpenProcess函数头写的JMP都失效了，在ring3直接调用OpenProcess再也毫无影响。
+***************************************************************************************************************************
+#include<ntddk.h>
+
+typedef struct _SERVICE_DESCRIPTOR_TABLE
+{
+  PVOID   ServiceTableBase;
+  PULONG  ServiceCounterTableBase;
+  ULONG   NumberOfService;
+  ULONG   ParamTableBase;
+}SERVICE_DESCRIPTOR_TABLE,*PSERVICE_DESCRIPTOR_TABLE; //由于KeServiceDescriptorTable只有一项,这里就简单点了
+extern PSERVICE_DESCRIPTOR_TABLE    KeServiceDescriptorTable;//KeServiceDescriptorTable为导出函数
+
+/////////////////////////////////////
+VOID Hook();
+VOID Unhook();
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject);
+//////////////////////////////////////
+ULONG JmpAddress;//跳转到NtOpenProcess里的地址
+ULONG OldServiceAddress;//原来NtOpenProcess的服务地址
+//////////////////////////////////////
+__declspec(naked) NTSTATUS __stdcall MyNtOpenProcess(PHANDLE ProcessHandle,
+               ACCESS_MASK DesiredAccess,
+               POBJECT_ATTRIBUTES ObjectAttributes,
+               PCLIENT_ID ClientId) 
+{
+  DbgPrint("NtOpenProcess() called");
+  __asm{
+    push    0C4h
+    push    804eb560h  //共十个字节
+    jmp     [JmpAddress]     
+  }
+}
+///////////////////////////////////////////////////
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject,PUNICODE_STRING RegistryPath)
+{
+  DriverObject->DriverUnload = OnUnload;
+  DbgPrint("Unhooker load");
+  Hook();
+  return STATUS_SUCCESS;
+}
+/////////////////////////////////////////////////////
+VOID OnUnload(IN PDRIVER_OBJECT DriverObject)
+{
+  DbgPrint("Unhooker unload!");
+  Unhook();
+}
+/////////////////////////////////////////////////////
+VOID Hook()
+{
+  ULONG  Address;
+  Address = (ULONG)KeServiceDescriptorTable->ServiceTableBase + 0x7A * 4;//0x7A为NtOpenProcess服务ID
+  DbgPrint("Address:0x%08X",Address);
+
+  OldServiceAddress = *(ULONG*)Address;//保存原来NtOpenProcess的地址
+  DbgPrint("OldServiceAddress:0x%08X",OldServiceAddress);
+
+  DbgPrint("MyNtOpenProcess:0x%08X",MyNtOpenProcess);
+
+  JmpAddress = (ULONG)NtOpenProcess + 10; //跳转到NtOpenProcess函数头＋10的地方，这样在其前面写的JMP都失效了
+  DbgPrint("JmpAddress:0x%08X",JmpAddress);
+    
+  __asm{//去掉内存保护
+    cli
+         mov  eax,cr0
+    and  eax,not 10000h
+    mov  cr0,eax
+  }
+
+  *((ULONG*)Address) = (ULONG)MyNtOpenProcess;//HOOK SSDT
+
+  __asm{//恢复内存保护  
+          mov  eax,cr0
+    or   eax,10000h
+    mov  cr0,eax
+    sti
+  }
+}
+//////////////////////////////////////////////////////
+VOID Unhook()
+{
+  ULONG  Address;
+  Address = (ULONG)KeServiceDescriptorTable->ServiceTableBase + 0x7A * 4;//查找SSDT
+
+  __asm{
+    cli
+          mov  eax,cr0
+    and  eax,not 10000h
+    mov  cr0,eax
+  }
+
+  *((ULONG*)Address) = (ULONG)OldServiceAddress;//还原SSDT
+
+  __asm{  
+         mov  eax,cr0
+    or   eax,10000h
+    mov  cr0,eax
+    sti
+  }
+
+  DbgPrint("Unhook");
+}
+××××××××××××××××××××××××××××××××××××××××××××××××××××××××××
+    就这么多了，或许有人说，没必要那么复杂，直接恢复NtOpenProcess不就行了吗？对于象“冰刃”“Rookit Unhooker”这些“善良”之辈的话是没问题的，但是象NP这些“穷凶极恶”之流的话，它会不断检测NtOpenProcess是不是已经被写回去，是的话，嘿嘿，机器马上重启。这也是这种方法的一点点妙用。 

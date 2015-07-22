@@ -1,0 +1,3 @@
+[Batch Build]
+SSDT_Service - Win32 Debug=1
+SSDT_Service - Win32 Release=1

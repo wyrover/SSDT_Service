@@ -1,0 +1,32 @@
+nt!KiSystemService:
+80542471 6a00            push    0
+80542473 55              push    ebp
+80542474 53              push    ebx
+80542475 56              push    esi
+80542476 57              push    edi
+80542477 0fa0            push    fs
+80542479 bb30000000      mov     ebx,30h
+8054247e 668ee3          mov     fs,bx
+80542481 64ff3500000000  push    dword ptr fs:[0]
+80542488 64c70500000000ffffffff mov dword ptr fs:[0],0FFFFFFFFh
+80542493 648b3524010000  mov     esi,dword ptr fs:[124h]
+8054249a ffb640010000    push    dword ptr [esi+140h]
+805424a0 83ec48          sub     esp,48h
+805424a3 8b5c246c        mov     ebx,dword ptr [esp+6Ch]
+805424a7 83e301          and     ebx,1
+805424aa 889e40010000    mov     byte ptr [esi+140h],bl
+805424b0 8bec            mov     ebp,esp
+805424b2 8b9e34010000    mov     ebx,dword ptr [esi+134h]
+805424b8 895d3c          mov     dword ptr [ebp+3Ch],ebx
+805424bb 89ae34010000    mov     dword ptr [esi+134h],ebp
+805424c1 fc              cld
+805424c2 8b5d60          mov     ebx,dword ptr [ebp+60h]
+805424c5 8b7d68          mov     edi,dword ptr [ebp+68h]
+805424c8 89550c          mov     dword ptr [ebp+0Ch],edx
+805424cb c74508000ddbba  mov     dword ptr [ebp+8],0BADB0D00h
+805424d2 895d00          mov     dword ptr [ebp],ebx
+805424d5 897d04          mov     dword ptr [ebp+4],edi
+805424d8 f6462cff        test    byte ptr [esi+2Ch],0FFh
+805424dc 0f858afeffff    jne     nt!Dr_kss_a (8054236c)
+805424e2 fb              sti
+805424e3 e9e7000000      jmp     nt!KiFastCallEntry+0x8f (805425cf)
